@@ -1,6 +1,7 @@
 import math
 import warnings
 import numpy as np
+import sklearn as sk
 from tqdm import tqdm
 
 warnings.simplefilter("error", RuntimeWarning)
@@ -12,6 +13,22 @@ def prep_data(size=5000):
     y = np.negative(np.ones((1, size))) + (0.5 * x) + (-2 * np.power(x, 2)) + (0.3 * np.power(x, 3)) + eps
     data = np.row_stack((x, y))
     return x, eps, y, data
+
+
+def prep_kfolds(data, k):  # method ONLY works with random (unsorted) data
+    size_data = data.shape[1]
+    size_fold = size_val = math.ceil(size_data / k)
+    # because data is randomly generated and NOT SORTED, we don't need to randomly select elements
+    folds = np.empty((k, 2, size_fold))
+    for i in range(k):
+        left = i * size_fold
+        right = (i + 1) * size_fold
+        fold = data[0:, left:right]
+        if fold.shape[1] != size_fold:
+            print("BUG: size_fold must be divisible by k (i.e. no remainder)")
+            exit(-3)
+        folds[i] = fold
+    return folds
 
 
 def adaline(input, weight, learning_rate=0.00001, mode=0, size=5000):
@@ -91,7 +108,61 @@ def sigmoid(input, weight, learning_rate=0.00001, mode=0, size=5001):
     return wj
 
 
-def question_1(learning_rate=0.00001, rounds=1000, size=5000):
+def kfold(folds, w_init, learning_rate=0.00001, rounds=1000, mode=0):
+    k = folds.shape[0]
+    size_fold = folds.shape[2]
+
+    def train_model(mode, weight, input):
+        if mode == 0:
+            return adaline(input, weight, learning_rate, mode=0, size=size_fold)
+        elif mode == 1:
+            return adaline(input, weight, learning_rate, mode=1, size=size_fold)
+        elif mode == 2:
+            s_input = np.concatenate((np.array([[1], [1]]), input), axis=1)
+            return sigmoid(s_input, weight, learning_rate, mode=0, size=size_fold+1)
+        elif mode == 3:
+            s_input = np.concatenate((np.array([[1], [1]]), input), axis=1)
+            return sigmoid(s_input, weight, learning_rate, mode=1, size=size_fold+1)
+        else:
+            print("[!!] Error: kfold.train() mode < 0 or mode > 3")
+            exit(-4)
+
+    def test_se(weight, x, y):
+        X = np.full((weight.size, 1), x)
+        y_pred = np.matmul(weight, X)[0][0]
+        squared_error = (y_pred - y) ** 2
+        return y_pred, squared_error
+
+    mse = 0
+    w = w_init
+    for i in tqdm(range(k), desc="{}-Fold Training...".format(k), leave=False):
+        # split folds into test and training set
+        test = folds[i]
+        train_folds = np.empty((k - 1, 2, size_fold))
+        for j in range(k):
+            if j < i:
+                train_folds[j] = folds[j]
+            elif j > i:
+                train_folds[j-1] = folds[j]
+        train = np.hstack(train_folds)
+
+        # train the model
+        w = w_init
+        for _ in tqdm(range(rounds), desc="Model Training", leave=False):
+            w = train_model(mode, w, train)
+
+        # test the model and record mse
+        se = 0
+        for i in range(size_fold):
+            _, se_i = test_se(w, test[0][i], test[1][i])
+            se = se + se_i
+        mse = mse + se / size_fold
+
+    # return the model mse and weight vector
+    return mse, w
+
+
+def question_1(learning_rate=0.00001, rounds=1000, size=5000, k=10):
     # Prepare Data-points
     x, eps, y, data = prep_data(size)
     w_init = np.random.rand(1, 4)
@@ -101,7 +172,7 @@ def question_1(learning_rate=0.00001, rounds=1000, size=5000):
     print("rounds = {}".format(rounds))
     print("dataset size = {}".format(size))
     print("Beginning...")
-
+    """
     # Train Adaline BGD
     wj = w_init.copy()
     w_true = np.array([-1, 0.5, -2, 0.3], np.float64)
@@ -136,6 +207,46 @@ def question_1(learning_rate=0.00001, rounds=1000, size=5000):
     print("Initial Weights: {}".format(w_init[0]))
     print("Final Weights: {}".format(wj[0]))
     print("True Weights: [-1, +0.5, -2, +0.3]")
+    """
+    # Cross-Validation Trials - 10-Fold CV
+
+    folds = prep_kfolds(data, k)
+    print(folds.shape)
+    print(folds.size)
+
+    # K-Fold with Adaline BGD
+    print("::K-Fold with Adaline BGD_____________________________")
+    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=0)
+    print("Initial Weights: {}".format(w_init[0]))
+    print("Final Weights: {}".format(wj[0]))
+    print("MSE: {}".format(mse))
+    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+
+    # K-Fold with Adaline SGD
+    print("::K-Fold with Adaline SGD_____________________________")
+    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=1)
+    print("Initial Weights: {}".format(w_init[0]))
+    print("Final Weights: {}".format(wj[0]))
+    print("MSE: {}".format(mse))
+    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+    
+    # K-Fold with Sigmoid BGD
+    print("::K-Fold with Sigmoid BGD_____________________________")
+    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=2)
+    print("Initial Weights: {}".format(w_init[0]))
+    print("Final Weights: {}".format(wj[0]))
+    print("MSE: {}".format(mse))
+    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+
+    # K-Fold with Sigmoid SGD
+    print("::K-Fold with Sigmoid SGD_____________________________")
+    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=3)
+    print("Initial Weights: {}".format(w_init[0]))
+    print("Final Weights: {}".format(wj[0]))
+    print("MSE: {}".format(mse))
+    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+
+
 
 if __name__ == '__main__':
     learning_rate = 0
@@ -155,4 +266,4 @@ if __name__ == '__main__':
     question_1(learning_rate, training_rounds)
     '''
     # Best Learning is 0.00001, 1000, 5000
-    question_1(0.00001, 100, 5000)
+    question_1(0.00001, 1000, 5000, k=10)
