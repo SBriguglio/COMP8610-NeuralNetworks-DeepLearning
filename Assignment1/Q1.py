@@ -15,6 +15,30 @@ def prep_data(size=5000):
     return x, eps, y, data
 
 
+def x_degree_d(xi, degree=3):
+    if degree == 1:
+        return np.array([[1, xi]])
+    elif degree == 2:
+        return np.array([[1, xi, xi**2]])
+    elif degree == 3:
+        return np.array([[1, xi, xi ** 2, xi ** 3]])
+    elif degree == 4:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4]])
+    elif degree == 5:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4, xi ** 5]])
+    elif degree == 6:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4, xi ** 5, xi ** 6]])
+    elif degree == 7:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4, xi ** 5, xi ** 6, xi ** 7]])
+    elif degree == 8:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4, xi ** 5, xi ** 6, xi ** 7, xi ** 8]])
+    elif degree == 9:
+        return np.array([[1, xi, xi ** 2, xi ** 3, xi ** 4, xi ** 5, xi ** 6, xi ** 7, xi ** 8, xi ** 9]])
+    else:
+        print("[!!] Error: x_degree_d requirement 1 <= degree <= 9")
+        exit(-5)
+
+
 def prep_kfolds(data, k):  # method ONLY works with random (unsorted) data
     size_data = data.shape[1]
     size_fold = size_val = math.ceil(size_data / k)
@@ -31,18 +55,18 @@ def prep_kfolds(data, k):  # method ONLY works with random (unsorted) data
     return folds
 
 
-def adaline(input, weight, learning_rate=0.00001, mode=0, size=5000):
+def adaline(input, weight, learning_rate=0.00001, mode=0, size=5000, degree=3):
     def bgd(input, w, learning_rate):
-        w_out = dw = np.zeros((1, 4))
+        w_out = dw = np.zeros((1, (degree+1)))
         for i in range(size):
             xi = input[0][i]
             yi = input[1][i]
-            x = np.array([[1, xi, xi**2, xi**3]])
+            x = x_degree_d(xi, degree)
             y_pred = np.matmul(w, x.T)[0][0]
-            for j in range(4):
+            for j in range(degree+1):
                 update = learning_rate * (yi - y_pred) * x[0][j]
                 dw[0][j] = dw[0][j] + update
-        for i in range(4):
+        for i in range(degree+1):
             w_out[0][i] = w[0][i] + dw[0][i]
         return w_out
 
@@ -51,9 +75,9 @@ def adaline(input, weight, learning_rate=0.00001, mode=0, size=5000):
         for i in range(size):
             xi = input[0][i]
             yi = input[1][i]
-            x = np.array([[1, xi, xi ** 2, xi ** 3]])
+            x = x_degree_d(xi, degree)
             y_pred = np.matmul(w, x.T)[0][0]
-            for j in range(4):
+            for j in range(degree+1):
                 update = learning_rate * (yi - y_pred) * x[0][j]
                 w_out[0][j] = w_out[0][j] + update
         return w_out
@@ -69,19 +93,19 @@ def adaline(input, weight, learning_rate=0.00001, mode=0, size=5000):
 
 
 # Sigmoid neuron will have an additional weight weight[0][0] and input[0][0]=1
-def sigmoid(input, weight, learning_rate=0.00001, mode=0, size=5001):
+def sigmoid(input, weight, learning_rate=0.00001, mode=0, size=5001, degree=3):
     def bgd(w):
-        w_out = dw = np.zeros((1, 4))
+        w_out = dw = np.zeros((1, degree+1))
         for i in range(size):
             xi = input[0][i]
             yi = input[1][i]
-            x = np.array([[1, xi, xi ** 2, xi ** 3]])
+            x = x_degree_d(xi, degree)
             v = np.matmul(weight, x.T)[0][0]
             y_pred = math.tanh(v)  # hyperbolic tangent
-            for j in range(4):
+            for j in range(degree+1):
                 update = 1 * learning_rate * (yi - y_pred) * (1 - (y_pred ** 2)) * x[0][j]
                 dw[0][j] = dw[0][j] + update
-        for k in range(4):
+        for k in range(degree+1):
             w_out[0][k] = w[0][k] + dw[0][k]
         return w_out
 
@@ -90,10 +114,10 @@ def sigmoid(input, weight, learning_rate=0.00001, mode=0, size=5001):
         for i in range(size):
             xi = input[0][i]
             yi = input[1][i]
-            x = np.array([[1, xi, xi ** 2, xi ** 3]])
+            x = x_degree_d(xi, degree)
             v = np.matmul(weight, x.T)[0][0]
             y_pred = math.tanh(v)  # hyperbolic tangent
-            for j in range(4):
+            for j in range(degree+1):
                 update = 1 * learning_rate * (yi - y_pred) * (1 - (y_pred ** 2)) * x[0][j]
                 w_out[0][j] = w_out[0][j] + update
         return w_out
@@ -111,18 +135,19 @@ def sigmoid(input, weight, learning_rate=0.00001, mode=0, size=5001):
 def kfold(folds, w_init, learning_rate=0.00001, rounds=1000, mode=0):
     k = folds.shape[0]
     size_fold = folds.shape[2]
+    degree = w_init.shape[1] - 1
 
     def train_model(mode, weight, input):
         if mode == 0:
-            return adaline(input, weight, learning_rate, mode=0, size=size_fold)
+            return adaline(input, weight, learning_rate, mode=0, size=size_fold, degree=degree)
         elif mode == 1:
-            return adaline(input, weight, learning_rate, mode=1, size=size_fold)
+            return adaline(input, weight, learning_rate, mode=1, size=size_fold, degree=degree)
         elif mode == 2:
             s_input = np.concatenate((np.array([[1], [1]]), input), axis=1)
-            return sigmoid(s_input, weight, learning_rate, mode=0, size=size_fold+1)
+            return sigmoid(s_input, weight, learning_rate, mode=0, size=size_fold+1, degree=degree)
         elif mode == 3:
             s_input = np.concatenate((np.array([[1], [1]]), input), axis=1)
-            return sigmoid(s_input, weight, learning_rate, mode=1, size=size_fold+1)
+            return sigmoid(s_input, weight, learning_rate, mode=1, size=size_fold+1, degree=degree)
         else:
             print("[!!] Error: kfold.train() mode < 0 or mode > 3")
             exit(-4)
@@ -165,7 +190,7 @@ def kfold(folds, w_init, learning_rate=0.00001, rounds=1000, mode=0):
 def question_1(learning_rate=0.00001, rounds=1000, size=5000, k=10):
     # Prepare Data-points
     x, eps, y, data = prep_data(size)
-    w_init = np.random.rand(1, 4)
+    # w_init = np.random.rand(1, degree+1)
 
     # Information (not required)
     print("learning rate = {}".format(learning_rate))
@@ -215,37 +240,76 @@ def question_1(learning_rate=0.00001, rounds=1000, size=5000, k=10):
     print(folds.size)
 
     # K-Fold with Adaline BGD
-    print("::K-Fold with Adaline BGD_____________________________")
-    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=0)
-    print("Initial Weights: {}".format(w_init[0]))
-    print("Final Weights: {}".format(wj[0]))
-    print("MSE: {}".format(mse))
-    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+    print("[::]K-Fold with Adaline BGD_____________________________")
+    results_error = np.empty((9, 2))
+    results_w = []
+    for i in tqdm(range(9), leave=False):
+        w_init = np.random.rand(1, i + 2)
+        try:
+            mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=0)
+            results_error[i][0] = i
+            results_error[i][1] = mse
+            results_w.append(wj)
+        except:
+            results_error[i][0] = math.nan
+            results_error[i][1] = math.nan
+            results_w.append(math.nan)
+    print("d\tMSE\n{}".format(results_error))
+    print("Weights\n{}\n".format(results_w))
 
     # K-Fold with Adaline SGD
-    print("::K-Fold with Adaline SGD_____________________________")
-    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=1)
-    print("Initial Weights: {}".format(w_init[0]))
-    print("Final Weights: {}".format(wj[0]))
-    print("MSE: {}".format(mse))
-    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+    print("[::]K-Fold with Adaline SGD_____________________________")
+    results_error = np.empty((9, 2))
+    results_w = []
+    for i in tqdm(range(9), leave=False):
+        w_init = np.random.rand(1, i + 2)
+        try:
+            mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=1)
+            results_error[i][0] = i
+            results_error[i][1] = mse
+            results_w.append(wj)
+        except:
+            results_error[i][0] = math.nan
+            results_error[i][1] = math.nan
+            results_w.append(math.nan)
+    print("d\tMSE\n{}".format(results_error))
+    print("Weights\n{}\n".format(results_w))
     
     # K-Fold with Sigmoid BGD
-    print("::K-Fold with Sigmoid BGD_____________________________")
-    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=2)
-    print("Initial Weights: {}".format(w_init[0]))
-    print("Final Weights: {}".format(wj[0]))
-    print("MSE: {}".format(mse))
-    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
+    print("[::]K-Fold with Sigmoid BGD_____________________________")
+    results_error = np.empty((9, 2))
+    results_w = []
+    for i in tqdm(range(9), leave=False):
+        w_init = np.random.rand(1, i + 2)
+        try:
+            mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=2)
+            results_error[i][0] = i
+            results_error[i][1] = mse
+            results_w.append(wj)
+        except:
+            results_error[i][0] = math.nan
+            results_error[i][1] = math.nan
+            results_w.append(math.nan)
+    print("d\tMSE\n{}".format(results_error))
+    print("Weights\n{}\n".format(results_w))
 
     # K-Fold with Sigmoid SGD
-    print("::K-Fold with Sigmoid SGD_____________________________")
-    mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=3)
-    print("Initial Weights: {}".format(w_init[0]))
-    print("Final Weights: {}".format(wj[0]))
-    print("MSE: {}".format(mse))
-    print("True Weights: [-1, +0.5, -2, +0.3]", end="\n\n")
-
+    print("[::]K-Fold with Sigmoid SGD_____________________________")
+    results_error = np.empty((9, 2))
+    results_w = []
+    for i in tqdm(range(9), leave=False):
+        w_init = np.random.rand(1, i + 2)
+        try:
+            mse, wj = kfold(folds, w_init, learning_rate, rounds, mode=3)
+            results_error[i][0] = i
+            results_error[i][1] = mse
+            results_w.append(wj)
+        except:
+            results_error[i][0] = math.nan
+            results_error[i][1] = math.nan
+            results_w.append(math.nan)
+    print("d\tMSE\n{}".format(results_error))
+    print("Weights\n{}\n".format(results_w))
 
 
 if __name__ == '__main__':
